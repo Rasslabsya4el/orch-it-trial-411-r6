@@ -1,0 +1,10 @@
+name: scratch-nojob
+
+# Planted for #411 row 7 (throwaway repo): a file GitHub cannot start, so a run has no job.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  nojob:
+    uses: Rasslabsya4el/orch-it-trial-411-no-such-repo/.github/workflows/none.yml@main
