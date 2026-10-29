@@ -33,4 +33,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        run: python -m orch_it skills report --repo "$REPO"
+        run: python -m orch_it skills report --repo "$REPO" || true
