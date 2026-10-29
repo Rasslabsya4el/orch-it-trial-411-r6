@@ -1,0 +1,154 @@
+name: tests
+
+# The job names `linux` and `windows` are required by branch protection by name: never rename them.
+# Pull request, push and manual (workflow_dispatch) runs leave the `slow` and `live` tests out; the nightly run (schedule) and a manual
+# run started with `-f slow_and_live=true` run the full suite with them (#394 decision 8, #421 rule 7).
+on:
+  # `edited` too: a title or body edit reruns the closing check (the home repo's ticket #422), which reads the text as it stands then
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      slow_and_live:
+        description: "run the tests marked slow and live too"
+        type: boolean
+        default: false
+
+# A newer push to a pull request cancels its older run: only the newer head's result counts.
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read  # check out the code
+  actions: read  # the nightly live test reads this repo's tests runs and their jobs
+
+env:
+  MARKS_LEFT_OUT_OF_CHANGE_RUNS: "not slow and not live"
+  NIGHTLY: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live) }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    # Bound: 15 minutes per change; the nightly run (the `env.NIGHTLY` condition, written out here because
+    # `env` is not readable in a job-level timeout) gets 27 minutes = ceil(17.4 x 1.5). Measured on GitHub runners
+    # in runs 40870600022 and 40870569933 (2026-10-29): full suite 17.4 and 16.7 min, pytest alone 16 m 21 s;
+    # margin 1.5 on the longest full run.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 27 || 15 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]"
+      # Every workflow file of the repo is linted on every run, before pytest: a context a key may not read
+      # (`runner` in a job's env, `steps` in a job's if) fails here, not as a run that never starts a job.
+      # No file arguments: actionlint finds every workflow file itself. actionlint comes with the `test` extra.
+      - name: lint the workflows
+        run: actionlint
+      # The commits a pull request adds hold no private data (#395 decision 4, row 7): the scan
+      # reads the pull request's own commits, not the merge into main, and takes the author's and
+      # the owner's public emails as allowed.
+      - name: private data in the pull request's commits
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          python -m orch_it guards scan --range "$BASE..$HEAD" --machine-independent --allow-email-of "$AUTHOR" --allow-email-of "$OWNER"
+      # A closing word before a reference (`fixes <URL>`, `Resolves #N`) makes GitHub close the ticket on merge (the home repo's ticket #422):
+      # the commits of the pull request, and its title and body, are read here, before the merge. The title and body
+      # reach the command as environment variables only, never on the shell line.
+      - name: closing words in the pull request's commits, title and body
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python -m orch_it merge closing-check --base "$BASE_REF" --head "$HEAD"
+      - name: pytest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORCH_IT_REQUIRE_SSHD: "1"
+        run: |
+          if [ "$NIGHTLY" = "true" ]; then kind=nightly; select=""; else kind=per_change; select="($MARKS_LEFT_OUT_OF_CHANGE_RUNS) and "; fi
+          cores=$(python -c "import os; print(os.cpu_count())")
+          bound=$(python -c 'import sys, tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["orch_it"]["tests"][sys.argv[1] + "_timeout_seconds"])' "$kind")
+          echo "pytest: $cores cores (os.cpu_count() on this machine), $cores workers; each test is bound to $bound seconds ($kind run)"
+          set +e
+          pytest -q -n "$cores" --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
+          parallel=$?
+          pytest -q --timeout "$bound" --junitxml=junit-serial.xml -m "${select}serial"
+          serial=$?
+          set -e
+          if [ "$parallel" != 0 ] || [ "$serial" != 0 ]; then
+            echo "pytest: a test over its bound of $bound seconds ($kind run) fails by name; on Windows pytest-timeout ends the worker, shown above as worker crashed while running <test>"
+          fi
+          python .github/scripts/merge_junit.py junit.xml junit.xml junit-serial.xml
+          if [ "$serial" = 5 ]; then serial=0; fi
+          exit $(( parallel != 0 ? parallel : serial ))
+      - name: upload the JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ github.job }}-${{ github.run_attempt }}
+          path: junit.xml
+          if-no-files-found: ignore
+
+  windows:
+    runs-on: windows-latest
+    # Bound: 15 minutes per change; the nightly run (the `env.NIGHTLY` condition, written out here because
+    # `env` is not readable in a job-level timeout) gets 59 minutes = ceil(39.3 x 1.5). Measured on GitHub runners
+    # in runs 40870600022 and 40870569933 (2026-10-29): full suite 39.3 and 39.2 min, pytest alone 38 m 43 s;
+    # margin 1.5 on the longest full run.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 59 || 15 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]"
+      - name: pytest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$NIGHTLY" = "true" ]; then kind=nightly; select=""; else kind=per_change; select="($MARKS_LEFT_OUT_OF_CHANGE_RUNS) and "; fi
+          cores=$(python -c "import os; print(os.cpu_count())")
+          bound=$(python -c 'import sys, tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["orch_it"]["tests"][sys.argv[1] + "_timeout_seconds"])' "$kind")
+          echo "pytest: $cores cores (os.cpu_count() on this machine), $cores workers; each test is bound to $bound seconds ($kind run)"
+          set +e
+          pytest -q -n "$cores" --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
+          parallel=$?
+          pytest -q --timeout "$bound" --junitxml=junit-serial.xml -m "${select}serial"
+          serial=$?
+          set -e
+          if [ "$parallel" != 0 ] || [ "$serial" != 0 ]; then
+            echo "pytest: a test over its bound of $bound seconds ($kind run) fails by name; on Windows pytest-timeout ends the worker, shown above as worker crashed while running <test>"
+          fi
+          python .github/scripts/merge_junit.py junit.xml junit.xml junit-serial.xml
+          if [ "$serial" = 5 ]; then serial=0; fi
+          exit $(( parallel != 0 ? parallel : serial ))
+      - name: upload the JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ github.job }}-${{ github.run_attempt }}
+          path: junit.xml
+          if-no-files-found: ignore

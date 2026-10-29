@@ -1,0 +1,36 @@
+name: skills-update
+
+# Daily and on demand (#397 decision 4): compare his upstream with the repo's skill copies and, on a
+# change, keep one issue per upstream commit ("His skills moved to <commit>", the class table in its
+# body, labelled `ready-for-agent` or `needs-triage`). It opens no pull request: one opened with this
+# workflow's token starts no workflow, so its required checks would never come (orch-it #44). ORCH
+# works the issue with `python -m orch_it skills update` under the owner's gh. The log's last line is
+# `no change`, `issue: <url> <label>` or `issue already open: <url> <label>`.
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: skills-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read  # check out the code
+  issues: write  # keep one issue per upstream commit, and the labels it carries
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: skills report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: python -m orch_it skills report --repo "$REPO"

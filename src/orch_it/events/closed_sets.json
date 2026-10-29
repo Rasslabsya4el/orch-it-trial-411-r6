@@ -1,0 +1,230 @@
+{
+  "_about": "The one place a kind, step id, outcome or reason code is defined (#393 decision 4). Built to the event list of #388 (docs/research/2026-10-25-event-list-355.md, sections 2, 3, 4, 8). A field is {} when its value is open, {\"codes\": <list name>} when its value must come from that list (a list value: every item; an object value: every key), {\"max_chars\": n} for a length bound. Named fields are the ones the list writes; detail stays open to any other field. docs/events.md is the human copy; tests/test_events_doc.py checks the two agree.",
+  "envelope": {
+    "id": {"type": "text", "nullable": false},
+    "kind": {"type": "kind", "nullable": false},
+    "at": {"type": "timestamp", "nullable": false},
+    "repo": {"type": "repo", "nullable": false},
+    "ticket": {"type": "int", "nullable": true},
+    "role": {"type": "code", "nullable": false, "codes": "role"},
+    "session": {"type": "text", "nullable": true},
+    "parent_session": {"type": "text", "nullable": true},
+    "turn": {"type": "text", "nullable": true},
+    "step": {"type": "step", "nullable": true},
+    "run": {"type": "text", "nullable": true},
+    "machine": {"type": "text", "nullable": false},
+    "os": {"type": "text", "nullable": false},
+    "layer_version": {"type": "text", "nullable": false},
+    "note": {"type": "text", "nullable": true}
+  },
+  "codes": {
+    "role": ["owner", "brain", "orch", "worker", "worker-strong", "reviewer-standards", "reviewer-spec", "reviewer-edge", "researcher-find", "researcher-how", "researcher-survey", "external-researcher", "launcher", "github", "hook", "script"],
+    "outcome": ["passed", "failed", "no_result", "refused", "lost", "stopped"],
+    "step_ended_any": ["suspended", "lease_lost"],
+    "launched_by": ["launcher", "owner", "session", "boot"],
+    "spawn_refusal": ["role_unknown", "role_not_spawned", "input_missing", "issue_unreadable", "unit_not_found", "unit_ambiguous", "diff_unreadable", "diff_empty", "worktree_not_git", "scratchpad_in_git_tree", "scratchpad_unusable", "repo_unknown"],
+    "spawn_input": ["issue", "unit", "diff", "worktree", "scratchpad"],
+    "session_end_reason": ["turn_ended", "idle", "context_ceiling", "killed", "outage", "stopped_by_owner", "crashed"],
+    "delivered": ["commit", "comment", "file", "none"],
+    "wait_reason": ["test_place", "rate_limit", "owner_answer", "brain_answer", "parked", "blocker", "review", "github_queue", "capacity"],
+    "place": ["own", "machine:<id>", "github"],
+    "test_os": ["linux", "windows", "macos"],
+    "place_reason": ["earliest_finish", "nothing_measured", "forced"],
+    "test_run_reason": ["red", "cut", "none_collected", "ids_not_collected", "summary_missing", "job_missing", "busy", "os_missing", "place_off", "out_of_minutes", "place_vanished", "superseded"],
+    "research_run_reason": ["too_short", "few_links", "no_reddit", "model_error", "no_reply", "empty", "time_bound", "stalled", "server_failed", "bridge_error"],
+    "report_from": ["last", "earlier", "joined"],
+    "review_axis": ["standards", "spec", "edge"],
+    "unit_reason": ["format", "result", "merge"],
+    "pr_reason": ["merged", "red", "closed_unmerged", "timeout", "withdrawn", "conflict"],
+    "call_target": ["gh", "git", "github_api", "bridge_http", "claude_cli"],
+    "check": ["pocock_contract", "leak", "guard_install", "branch_protection", "hooks_path", "environment"],
+    "claim_reason": ["held_by_other", "not_ready"],
+    "plan_reason": ["ticket_changed", "not_doable"],
+    "close_reason": ["acceptance_missing", "row_failed", "unanswered", "already_closed", "ticket_changed"],
+    "repair": ["lease_released", "closed", "unparked", "rerun", "red_ticket_opened"],
+    "turn_reason": ["price_missing", "usage_unreadable"],
+    "load_verdict": ["code", "load"],
+    "hook_action": ["acted", "skipped"],
+    "run_check_result": ["alive", "ended", "failed"],
+    "tool_outcome": ["passed", "failed", "refused"],
+    "report_label": ["tdd", "diagnosis", "code-review", "research", "writing-for-agents", "domain-modeling", "codebase-design", "report_cap", "table"],
+    "context_threshold": ["context_line", "ceiling"],
+    "context_action": ["handed_off", "new_work_taken", "told"],
+    "message_kind": ["notice", "question", "answer", "handoff", "report"],
+    "ticket_field": ["title", "body", "labels", "weight", "priority", "assignee", "parent", "blocked_by"],
+    "release_reason": ["closed", "parked", "handed_off", "session_ended"],
+    "park_on": ["pr_ended", "ticket_closed", "date", "run_ended", "owner_answer", "layer_version"],
+    "unpark_by": ["event", "hand"],
+    "wait_end_reason": ["kind_unknown", "ref_bad", "until_bad", "date_after_until", "until_past", "ticket_missing", "ticket_not_open", "already_parked", "ref_missing", "ref_not_pr", "ref_not_ticket", "ref_self", "ref_parent", "event_passed", "park_mismatch", "ticket_changed", "body_too_long", "other_way", "late", "comment", "unreadable", "hand"],
+    "park_return": ["due", "other_way", "late", "comment", "unreadable", "hand"],
+    "hook_reason": ["write_ticket_missing", "park_by_hand", "body_unreadable", "command_unreadable", "issue_unreadable", "shape", "passed"],
+    "ticket_rule": ["title_too_long", "title_parked", "title_issue_number", "human_block_missing", "human_block_not_first", "human_field_missing", "human_field_order", "human_field_not_russian", "human_field_path", "agent_block_missing", "acceptance_missing", "outside_case_missing", "outside_case_no_row", "same_object_missing", "events_row_missing", "weight_missing", "weight_bad", "write_ticket_missing", "park_by_hand", "body_unreadable", "command_unreadable", "issue_unreadable"],
+    "park_unreadable": ["line_missing", "line_bad", "lines_many", "label_missing", "ref_missing"],
+    "comment_kind": ["checkpoint", "send_back", "accepted", "owner_answer", "brain_answer", "resolution", "closing", "machine"],
+    "close_via": ["close_command", "github_keyword", "manual"],
+    "state_reason": ["completed", "not_planned"],
+    "row_result": ["pass", "fail", "na"],
+    "finding_fate": ["fixed", "dismissed", "open"],
+    "launch_result": ["started", "refused"],
+    "guard": ["worktree_delete", "foreign_process_stop", "main_push_no_green", "private_data_public"],
+    "refused_by": ["worktree_delete", "foreign_process_stop", "main_push_no_green", "private_data_public", "permission"],
+    "guard_verdict": ["deny", "pass"],
+    "doc_kind": ["glossary", "adr", "state", "role_file", "skill", "core_block", "research", "memory", "config"],
+    "drift": ["behind", "hook_extra", "hook_missing", "file_edited_in_target", "leak"],
+    "setting_source": ["repo", "machine", "default"],
+    "resume_cause": ["suspend", "hibernate"],
+    "attempt_reason": ["red", "red_on_main", "no_result", "conflict"],
+    "line_reason": ["empty", "next_run", "bound", "error", "lock_busy", "lock_stale"],
+    "line_result": ["merged", "left", "starved", "bound", "refused"]
+  },
+  "steps": {
+    "session": {
+      "started": {"model": {}, "effort": {}, "agent_file": {}, "title": {}, "launched_by": {"codes": "launched_by"}},
+      "ended": {"reason": {"codes": "session_end_reason"}, "held_tickets": {}, "checkpoint_written": {}}
+    },
+    "subagent": {
+      "started": {"model": {}, "effort": {}, "agent_file": {}, "title": {}, "launched_by": {"codes": "launched_by"}, "unit": {}, "worktree": {}, "prompt_has": {}, "prompt_chars": {}},
+      "ended": {"reason": {"codes": "session_end_reason"}, "held_tickets": {}, "checkpoint_written": {}, "delivered": {"codes": "delivered"}, "report_lines_owed": {}, "report_lines_present": {}, "refused": {"codes": "spawn_refusal"}, "refused_input": {"codes": "spawn_input"}}
+    },
+    "wait": {
+      "started": {"reason": {"codes": "wait_reason"}, "on": {}},
+      "ended": {"reason": {"codes": "wait_end_reason"}}
+    },
+    "test_run": {
+      "started": {"place": {"codes": "place"}, "selection": {}, "commit": {}, "branch": {}, "pr": {}, "workers": {}, "settings_hash": {}, "part": {}, "run_os": {"codes": "test_os"}, "places_offered": {}, "chosen": {"codes": "place"}, "reason": {"codes": "place_reason"}},
+      "ended": {"reason": {"codes": "test_run_reason"}, "collected": {}, "passed": {}, "failed": {}, "skipped": {}, "summary_seen": {}, "billed_minutes": {}, "start_minutes": {}, "run_minutes": {}}
+    },
+    "review": {
+      "started": {"axis": {"codes": "review_axis"}, "unit": {}, "diff_ref": {}},
+      "ended": {"findings": {}, "fixed": {}}
+    },
+    "unit": {
+      "started": {"unit": {}, "assigned_role": {"codes": "role"}, "model": {}},
+      "ended": {"commit": {}, "note_present": {}, "reason": {"codes": "unit_reason"}}
+    },
+    "pr": {
+      "started": {"pr": {}, "branch": {}, "base": {}, "head": {}},
+      "ended": {"merge_sha": {}, "reason": {"codes": "pr_reason"}}
+    },
+    "core_update": {
+      "started": {"target": {}, "from_version": {}, "to_version": {}, "pr": {}},
+      "ended": {"files_changed": {}, "files_removed": {}, "hooks_added": {}, "hooks_removed": {}, "settings_removed": {}}
+    },
+    "install": {
+      "started": {"target": {}, "version": {}, "steps": {}},
+      "ended": {"files_copied": {}, "stubs_written": {}, "labels_created": {}}
+    },
+    "research_run": {
+      "started": {"brief": {}, "model_alias": {}, "no_reddit": {}, "brief_chars": {}, "brief_sha": {}, "model": {}, "helpers": {}, "job": {}},
+      "ended": {"tokens_in": {}, "tokens_out": {}, "helper_tokens_in": {}, "helper_tokens_out": {}, "reddit_urls": {}, "search_429": {}, "compactions": {}, "report_path": {}, "report_chars": {}, "reason": {"codes": "research_run_reason"}, "report_from": {"codes": "report_from"}, "links": {}, "last_chars": {}, "tokens_reasoning": {}, "tokens_cache_read": {}, "tokens_cache_write": {}, "helper_tokens_reasoning": {}, "helper_tokens_cache_read": {}, "helper_tokens_cache_write": {}, "helper_sessions": {}, "helper_depth": {}, "unread_sessions": {}, "partial_path": {}, "minutes": {}, "opencode_session": {}, "server_error": {}, "abort_failed": {}, "named_path_unwritable": {}, "error": {}, "model_error": {"max_chars": 200}}
+    },
+    "process": {
+      "started": {"program": {}, "pid": {}, "argv0": {}, "hidden": {}, "launched_by": {}, "mechanism": {}},
+      "ended": {"rc": {}}
+    },
+    "external_call": {
+      "started": {"target": {"codes": "call_target"}, "command": {}},
+      "ended": {"rc": {}, "transient": {}, "retries": {}, "timed_out": {}}
+    },
+    "check": {
+      "started": {"check": {"codes": "check"}, "target": {}},
+      "ended": {"findings": {}, "facts": {}}
+    },
+    "sweep": {
+      "started": {"tickets_read": {}},
+      "ended": {}
+    },
+    "test_map": {
+      "started": {"sha": {}, "place": {}},
+      "ended": {"tests": {}}
+    },
+    "keepalive_install": {
+      "started": {"task": {}},
+      "ended": {"triggers_kept": {}, "triggers_left_out": {}}
+    },
+    "acceptance": {
+      "started": {"rows_total": {}},
+      "ended": {"rows_passed": {}, "rows_failed": {}, "rows_na": {}}
+    },
+    "ticket_write": {
+      "started": {"ticket": {}, "write_ticket_called": {}},
+      "ended": {"shape_check": {}}
+    },
+    "launch": {
+      "started": {"offered": {}, "capacity": {}, "capacity_used": {}},
+      "ended": {"reason": {}}
+    },
+    "claim": {
+      "started": {"ticket": {}, "lease_minutes": {}},
+      "ended": {"holder": {}, "reason": {"codes": "claim_reason"}}
+    },
+    "plan": {
+      "started": {"ticket": {}},
+      "ended": {"units": {}, "self_done": {}, "reason": {"codes": "plan_reason"}}
+    },
+    "close": {
+      "started": {"ticket": {}, "pr": {}},
+      "ended": {"reason": {"codes": "close_reason"}}
+    },
+    "line": {
+      "started": {"base": {}, "prs": {}},
+      "ended": {"merged": {}, "left": {}, "reason": {"codes": "line_reason"}}
+    },
+    "reconcile": {
+      "started": {"run": {}},
+      "ended": {"repairs": {"codes": "repair"}}
+    }
+  },
+  "kinds": {
+    "turn.used": {"model": {}, "input_tokens": {}, "output_tokens": {}, "cache_read_tokens": {}, "cache_write_tokens": {}, "usd": {}, "price_table": {}, "tickets_held": {}, "reason": {"codes": "turn_reason"}},
+    "test.result": {"test_id": {}, "outcome": {}, "skip_reason": {}, "ms": {}, "attempt": {}, "load_verdict": {"codes": "load_verdict"}},
+    "hook.ran": {"hook": {}, "action": {"codes": "hook_action"}, "reason": {"codes": "hook_reason"}, "rules": {"codes": "ticket_rule"}},
+    "run.checked": {"checked_run": {}, "result": {"codes": "run_check_result"}},
+    "ticket.transferred": {"from_repo": {}, "from_number": {}, "to_repo": {}, "to_number": {}},
+    "machine.booted": {},
+    "tool.called": {"tool": {}, "args_head": {"max_chars": 120}, "outcome": {"codes": "tool_outcome"}, "refused_by": {"codes": "refused_by"}, "ms": {}},
+    "skill.called": {"skill": {}, "called_at_step": {}, "before_first_edit": {}},
+    "skill.shadowed": {"skill": {}, "copy": {}, "same_text": {}},
+    "lock.removed": {"holder": {}, "since": {}, "held_minutes": {}},
+    "line.served": {"pr": {}, "result": {"codes": "line_result"}, "followed": {}, "waited_minutes": {}, "updates": {}},
+    "report_line.checked": {"label": {"codes": "report_label"}, "claimed": {}, "verified": {}, "accepted": {}, "first_edit_path": {}},
+    "rule_file.read": {"path": {}, "sha": {}, "lines_read": {}, "lines_total": {}},
+    "context.crossed": {"threshold": {"codes": "context_threshold"}, "tokens": {}, "action_after": {"codes": "context_action"}},
+    "message.sent": {"to_session": {}, "to_role": {"codes": "role"}, "kind": {"codes": "message_kind"}, "delivered": {}, "recipient_idle_minutes": {}},
+    "handoff.written": {"context_tokens": {}, "tickets_closed": {}, "tickets_parked": {}, "entry_ref": {}},
+    "handoff.read": {"entry_ref": {}, "found": {}, "source": {}},
+    "ticket.opened": {"title": {}, "labels": {}, "parent": {}, "weight": {}, "priority": {}, "write_ticket_called": {}, "has_outside_case": {}, "acceptance_rows": {}},
+    "ticket.edited": {"field": {"codes": "ticket_field"}, "before": {}, "after": {}, "write_ticket_called": {}},
+    "ticket.claimed": {"weight": {}, "capacity_used": {}},
+    "ticket.released": {"reason": {"codes": "release_reason"}},
+    "ticket.parked": {"on": {"codes": "park_on"}, "on_ref": {}, "until": {}},
+    "ticket.unparked": {"by": {"codes": "unpark_by"}, "on_ref": {}, "late_minutes": {}, "returned_as": {"codes": "park_return"}},
+    "park.unreadable": {"reason": {"codes": "park_unreadable"}},
+    "comment.written": {"comment_kind": {"codes": "comment_kind"}},
+    "attempt.counted": {"reason": {"codes": "attempt_reason"}, "counted": {}, "in_a_row": {}},
+    "ticket.closed": {"via": {"codes": "close_via"}, "state_reason": {"codes": "state_reason"}, "rows_total": {}, "rows_passed": {}, "comments_unanswered": {}},
+    "ticket.reopened": {"reason": {}},
+    "acceptance_row.checked": {"row": {}, "result": {"codes": "row_result"}, "place": {}, "evidence": {}},
+    "review.finding": {"axis": {"codes": "review_axis"}, "rule_or_row": {}, "fate": {"codes": "finding_fate"}, "failing_test": {}},
+    "owner.asked": {"question_ref": {}, "options": {}},
+    "owner.answered": {"question_ref": {}},
+    "launch.decided": {"offered": {}, "capacity": {}, "capacity_used": {}, "result": {"codes": "launch_result"}, "reason": {}},
+    "guard.fired": {"guard": {"codes": "guard"}, "verdict": {"codes": "guard_verdict"}, "segment": {"max_chars": 120}, "rule_id": {}, "path": {}},
+    "guard.reversed": {"guard": {"codes": "guard"}, "fired_event": {}, "by": {}},
+    "error.raised": {"component": {}, "error_code": {}, "failed_open": {}},
+    "pr.updated": {"pr": {}, "old_head": {}, "new_head": {}, "forced": {}, "base_moved": {}, "runs_cancelled": {}},
+    "pr.conflicted": {"pr": {}, "files": {}, "other_pr": {}},
+    "pr.conflict_resolved": {"pr": {}, "files": {}},
+    "pr.commented": {"pr": {}, "author_role": {"codes": "role"}, "answered": {}},
+    "main.red": {"sha": {}, "test_ids": {}, "introduced_by_pr": {}},
+    "main.reverted": {"sha": {}, "reverted_sha": {}, "reason": {}},
+    "doc.edited": {"path": {}, "doc_kind": {"codes": "doc_kind"}, "commit": {}, "required_skill_called": {}, "term_or_number": {}},
+    "term.missing": {"term": {}, "where": {}},
+    "drift.found": {"target": {}, "drift": {"codes": "drift"}, "path": {}, "pattern_id": {}},
+    "setting.read": {"key": {}, "value": {}, "source": {"codes": "setting_source"}},
+    "value.measured": {"name": {}, "value": {}, "unit": {}, "source": {}},
+    "view.read": {"view": {}, "item": {}},
+    "step.progressed": {},
+    "machine.resumed": {"gap_minutes": {}, "cause": {"codes": "resume_cause"}}
+  }
+}

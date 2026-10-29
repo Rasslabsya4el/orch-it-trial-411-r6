@@ -1,0 +1,51 @@
+name: main check
+
+# Main is checked after every merge (#400 decision 4): when a run of `tests` on the default branch
+# ends (a push after a merge, or the nightly run), `main check` opens one red-on-main ticket for
+# the failing tests no open one lists, closes the ones that pass now, and runs a run with no result
+# once more. The `tests` workflow is read, never changed: this adds no required check.
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+
+permissions:
+  contents: read  # check out the default branch's code
+  pull-requests: read  # read the pull requests of the commit a red run brings, to name the one that did
+  issues: write  # open, comment on and close the red-on-main tickets
+  actions: write  # read a tests run's jobs and reports, rerun a run with no result
+
+# one check at a time: two checks of two runs never open the same ticket twice
+concurrency:
+  group: main-check-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: >-
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      github.event.workflow_run.event != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: main check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+          ORCH_IT_STORE: ${{ runner.temp }}/orch-it-events
+        run: python -m orch_it main check --repo "$GITHUB_REPOSITORY" --branch "$BRANCH" --role github
+      - name: upload the events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orch-it-events-main-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/orch-it-events
+          if-no-files-found: ignore
+          retention-days: 30

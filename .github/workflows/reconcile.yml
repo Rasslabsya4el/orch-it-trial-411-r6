@@ -1,0 +1,49 @@
+name: reconcile
+
+# The scheduled sweep of the merge flow (#400): `reconcile` follows every pull request a parked
+# ticket waits on and every member of the merge line, and runs the main check, so a merged pull
+# request whose follow never ran still closes its ticket. It starts no work. When Actions are off
+# the same command runs on the machine (the launcher's schedule, part 6). Not a required check.
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # git fetch of a pull request's head, the compare behind it, auto-merge on the pull request
+  pull-requests: write  # read a pull request, its reviews and comments; turn auto-merge on or off
+  issues: write  # comment on, label and close the ticket
+  actions: write  # rerun or cancel a tests run, read its reports and jobs
+  checks: read  # read the check runs of a pull request's head
+
+# never two sweeps at once; one with a follow running waits for it (the same group as `follow`)
+concurrency:
+  group: follow-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.repository.default_branch }}
+          ORCH_IT_STORE: ${{ runner.temp }}/orch-it-events
+        run: python -m orch_it reconcile --repo "$GITHUB_REPOSITORY" --base "$BASE" --role github
+      - name: upload the events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orch-it-events-reconcile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/orch-it-events
+          if-no-files-found: ignore
+          retention-days: 30

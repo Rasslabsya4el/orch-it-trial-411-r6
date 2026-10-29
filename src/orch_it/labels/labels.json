@@ -1,0 +1,10 @@
+{
+  "needs-triage": {"color": "fbca04", "description": "The brain decides what happens next"},
+  "needs-info": {"color": "d4c5f9", "description": "Waits for an answer before it can be shaped"},
+  "ready-for-agent": {"color": "0e8a16", "description": "Shape checked; an agent may take it"},
+  "ready-for-human": {"color": "1d76db", "description": "Needs a person's hands; no agent takes it"},
+  "wontfix": {"color": "ffffff", "description": "Decided not to be done"},
+  "parked": {"color": "c5def5", "description": "Waits on one named event until a date; written only by tickets park"},
+  "priority": {"color": "d93f0b", "description": "The owner's push: offered first, kept while parked"},
+  "brain-handoff": {"color": "5319e7", "description": "The brain's pinned hand-off issue: never offered as work, never swept"}
+}

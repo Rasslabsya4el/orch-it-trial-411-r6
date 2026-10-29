@@ -1,0 +1,36 @@
+name: ticket shape
+
+# The GitHub side of the shape check (#398 decision 3): a ticket that gets `ready-for-agent`, or
+# a ready ticket that is edited, is judged by the same shape rules as the session hook, so a
+# label set by hand on github.com is judged too. With violations the label comes off and a
+# comment lists them; the body is never edited. Not a required check: it runs on issues only.
+on:
+  issues:
+    types: [labeled, edited]
+
+permissions:
+  issues: write  # take the ready label off a ticket and comment the violations
+  contents: read  # check out the code
+
+# one check at a time per ticket; a newer event judges the ticket as it stands then
+concurrency:
+  group: ticket-shape-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  shape:
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'ready-for-agent') ||
+      (github.event.action == 'edited' && contains(github.event.issue.labels.*.name, 'ready-for-agent'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: judge the ticket
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m orch_it tickets check-github --event "$GITHUB_EVENT_PATH"

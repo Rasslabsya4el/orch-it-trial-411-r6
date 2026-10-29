@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orch-it"
+version = "0.0.0"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["psutil>=5.9"]  # the one cross-platform reading of the process tree (#395 decision 3)
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-xdist>=3", "pytest-timeout>=2", "actionlint-py>=1.7"]  # xdist: one worker per core in the `tests` workflow; timeout: the per-test bound of [tool.orch_it.tests]; actionlint-py: the workflow linter, run by the `tests` workflow and tests/test_workflow_lint.py
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+orch_it = ["events/*.json", "events/*.sql", "events/queries/*.sql", "labels/*.json", "roles/*.json", "shipped/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --ignore=tests/fixtures"
+markers = [
+    "slow: long; the workflow leaves it out of pull request and push runs (#394 decision 8)",
+    "live: reads a live outside service; the workflow leaves it out of pull request and push runs",
+    "serial: cannot share a machine with other tests; the workflow runs it after the parallel phase, in the same job (#421; the target is zero such tests)",
+]
+
+# The per-test time bound of each run kind, in seconds, read by the `tests` workflow (#421 rule 3): a test over the
+# bound of its run kind fails with its name. A change run (pull request, push, manual run without slow and live) takes
+# `per_change_timeout_seconds`, the nightly run (schedule, or manual run with slow and live) `nightly_timeout_seconds`.
+[tool.orch_it.tests]
+per_change_timeout_seconds = 120
+nightly_timeout_seconds = 600

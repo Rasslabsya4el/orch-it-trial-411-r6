@@ -1,0 +1,64 @@
+name: follow
+
+# The ticket follows its pull request (#400 decision 3): a pull request closed (merged or not), a
+# review or a comment on it, and a comment on, edit of or close of a parked ticket each run
+# `follow`, which moves the ticket as the pull request stands. The workflow's token closes,
+# labels and comments, and nothing downstream needs to start from what it writes. Not a required
+# check. The events it writes stay in the run's own store and are uploaded as an artifact, which
+# `reconcile` on the machine brings into the machine's store.
+on:
+  pull_request:
+    types: [closed]
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+  issues:
+    types: [edited, closed]
+
+permissions:
+  contents: write  # git fetch of a pull request's head, the compare behind it, auto-merge on the pull request
+  pull-requests: write  # read a pull request, its reviews and comments; turn auto-merge on or off
+  issues: write  # comment on, label and close the ticket
+  actions: write  # rerun or cancel a tests run, read its reports and jobs
+  checks: read  # read the check runs of a pull request's head
+
+# one follow at a time in the repo (a pull request event and its ticket's event never race); a
+# follow waiting behind another may be dropped for a newer one, which reads the state as it stands
+concurrency:
+  group: follow-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    # a comment or edit on an issue matters only when it is a pull request or a parked ticket
+    if: >-
+      github.event_name != 'issue_comment' && github.event_name != 'issues' ||
+      github.event.issue.pull_request ||
+      contains(github.event.issue.labels.*.name, 'parked')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # the layer's code of the default branch, never the pull request's own
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: follow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORCH_IT_STORE: ${{ runner.temp }}/orch-it-events
+        run: python -m orch_it follow --event "$GITHUB_EVENT_PATH" --repo "$GITHUB_REPOSITORY" --role github
+      - name: upload the events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orch-it-events-follow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/orch-it-events
+          if-no-files-found: ignore
+          retention-days: 30
