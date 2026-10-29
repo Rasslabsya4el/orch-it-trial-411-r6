@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 
 from orch_it import labels, settings
 from orch_it.merge import marks
+from orch_it.merge.commands import required_jobs
 from orch_it.merge.gh import GhPullHub
 from orch_it.merge.pr_open import after_open
 from orch_it.merge.settings import MergeSettings
@@ -105,12 +106,12 @@ class GithubForge:
             pull = hub.pull(self.repo, number)
             if pull is None:
                 raise SkillsError("forge_failed", f"{self.repo}#{number}: no such pull request")
-            method = MergeSettings.from_settings(settings.load(), self.repo).merge_method
+            raw = settings.load()
+            method, required = MergeSettings.from_settings(raw, self.repo).merge_method, required_jobs(raw)
             ready = marks.ready_since(marks.of_layer(hub.pull_comments(self.repo, number), self.repo.split("/")[0]))
-            if ready is not None and ready.head == pull.head_sha:
-                hub.set_auto_merge(self.repo, number, method)
-            else:
-                after_open(hub, self.repo, number, pull.head_sha, None, datetime.now(UTC), method)
+            marked = ready is not None and ready.head == pull.head_sha  # a re-used pull request already marked
+            after_open(hub, self.repo, number, pull.head_sha, None, datetime.now(UTC), method, pull.base, required,
+                       mark_written=marked)
         except (GithubError, SettingsError) as e:
             raise SkillsError("forge_failed", str(e)) from None
 

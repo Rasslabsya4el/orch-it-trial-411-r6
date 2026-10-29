@@ -64,18 +64,6 @@ class LineError(ValueError):
         super().__init__(f"{code}: {detail}" if detail else code)
 
 
-def _hit_lines(text: str, hits: list[str]) -> list[int]:
-    """The 1-based line each closing keyword hit (as `marks.closing_keywords` returned it, in order) starts
-    on in `text`."""
-
-    lines, at = [], 0
-    for hit in hits:
-        at = text.index(hit, at)
-        lines.append(text.count("\n", 0, at) + 1)
-        at += len(hit)
-    return lines
-
-
 @dataclass(frozen=True)
 class Served:
     pr: int
@@ -252,7 +240,7 @@ class _Line:
 
     def follow(self, number: int) -> FollowReport:
         return follow(self.hub, self.store, self.repo, number, base=self.base, settings=self.settings,
-                      now=self.clock(), role=self.role, required=self.required, owner=self.owner)
+                      now=self.clock(), role=self.role, required=self.required, owner=self.owner, merge=False)
 
     def closing_check(self, number: int) -> None:
         """Before the merge: the title and body as they are now (a fresh read, so an edit after `pr open`
@@ -262,13 +250,9 @@ class _Line:
         now = self.hub.pull(self.repo, number)
         if now is None:
             return
-        found = []
-        for name, text in (("title", now.title), ("body", now.body)):
-            hits = marks.closing_keywords(text)
-            for hit, at_line in zip(hits, _hit_lines(text, hits)):
-                found.append(f"the {name} at line {at_line} says {hit}")
-        if found:
-            raise LineError("closing_keyword", f"#{number}: {'; '.join(found)}: write `Refs <URL>` in its place")
+        why = marks.closing_refusal(number, now.title, now.body)
+        if why:
+            raise LineError("closing_keyword", why)
 
     def refuse(self, member: _Member, refusal: LineError, updates: int) -> Served:
         """A pull request whose text closes a ticket by a word leaves the line the way `follow._leave` takes

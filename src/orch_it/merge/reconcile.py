@@ -74,7 +74,7 @@ def reconcile(hub: PullHub, store: Store, repo: str, base: str, *, settings: Mer
     for number in _to_follow(hub, repo, base, owner):
         try:
             done = follow(hub, store, repo, number, base=base, settings=settings, now=now, role=role,
-                          required=required, owner=owner)
+                          required=required, owner=owner, merge=True)  # the backstop of a dropped workflow run
         except Exception as e:  # one pull request that cannot be followed never ends the sweep
             failed.append(_failed(store, repo, role, run, f"#{number}", e))
             continue

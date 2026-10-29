@@ -85,6 +85,10 @@ class PullHub(Hub, Protocol):
     def close_pull(self, repo: str, number: int) -> None:
         """Close a pull request unmerged."""
 
+    def required_checks_of(self, repo: str, base: str) -> set[str]:
+        """The check names `base` requires before a pull request into it merges: classic protection and rulesets
+        both; a base that protects nothing (or a plan that does not allow it) requires none, the empty set."""
+
     def set_auto_merge(self, repo: str, number: int, method: str | None) -> None:
         """Turn auto-merge on with `method`, or off with None; already so is no error."""
 

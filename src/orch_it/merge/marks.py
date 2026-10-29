@@ -88,6 +88,22 @@ def closing_keywords(text: str) -> list[str]:
     return [m.group(0) for m in _CLOSING.finditer(text or "")]
 
 
+def closing_refusal(number: int, title: str, body: str) -> str | None:
+    """Why a pull request's title and body (as they are now) may not be merged, or None: each closing keyword,
+    the text it is in and the line it starts on. The one check the merge line and `follow` run before a merge."""
+
+    found = []
+    for name, text in (("title", title), ("body", body)):
+        hits = closing_keywords(text)
+        lines, at = [], 0
+        for hit in hits:
+            at = text.index(hit, at)
+            lines.append(text.count("\n", 0, at) + 1)
+            at += len(hit)
+        found += [f"the {name} at line {line} says {hit}" for hit, line in zip(hits, lines)]
+    return f"#{number}: {'; '.join(found)}: write `Refs <URL>` in its place" if found else None
+
+
 def part_of(body: str) -> tuple[int, int] | None:
     """The part a pull request's body names with its line `Part: k of n` (#434), or None when it names
     none, or names one that is not 1 <= k <= n."""

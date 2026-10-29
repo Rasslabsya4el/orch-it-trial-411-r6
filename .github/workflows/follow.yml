@@ -1,10 +1,16 @@
 name: follow
 
 # The ticket follows its pull request (#400 decision 3): a pull request closed (merged or not), a
-# review or a comment on it, and a comment on, edit of or close of a parked ticket each run
-# `follow`, which moves the ticket as the pull request stands. The workflow's token closes,
-# labels and comments, and nothing downstream needs to start from what it writes. Not a required
-# check. The events it writes stay in the run's own store and are uploaded as an artifact, which
+# review or a comment on it, a comment on, edit of or close of a parked ticket, and the end of a
+# `tests` run each run `follow`, which moves the ticket as the pull request stands. The end of a
+# `tests` run follows the open pull requests whose head is the run's commit: a pull request with a
+# ready mark and no auto-merge on a base that requires no check (#424) is merged there once its
+# checks are green, and nothing else fires when they turn green. The workflow's token closes,
+# labels, comments and merges, and nothing downstream needs to start from what it writes. Known limits: a
+# merge made with GITHUB_TOKEN starts no workflow, so a `push` run of `tests` / `main-check` does not fire
+# for a merge the follow makes on a base with no required checks (a known limit of that class of base); and
+# the concurrency group below may drop a waiting `workflow_run` follow for a newer one, which the hourly
+# `reconcile` then picks up. Not a required check. The events it writes stay in the run's own store and are uploaded as an artifact, which
 # `reconcile` on the machine brings into the machine's store.
 on:
   pull_request:
@@ -17,6 +23,9 @@ on:
     types: [created]
   issues:
     types: [edited, closed]
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
 
 permissions:
   contents: write  # git fetch of a pull request's head, the compare behind it, auto-merge on the pull request

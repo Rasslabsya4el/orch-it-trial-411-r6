@@ -163,6 +163,35 @@ class GhPullHub(GhHub):
     def close_pull(self, repo: str, number: int) -> None:
         self._send(["api", "-X", "PATCH", f"repos/{repo}/pulls/{number}"], {"state": "closed"})
 
+    def required_checks_of(self, repo: str, base: str) -> set[str]:
+        """The names a base requires, from its classic protection (`contexts` and `checks`) and from its rulesets
+        (the `required_status_checks` rule). A 403 or 404 on either route (not protected, or a plan without it) is
+        no requirement on that route; any other refusal raises."""
+
+        names = set()
+        try:
+            found = self._object(["api", f"repos/{repo}/branches/{quote(base, safe='')}/protection"], missing_ok=True)
+        except GithubError as e:
+            if not _unprotected(e):
+                raise
+            found = None
+        section = (found or {}).get("required_status_checks")
+        if isinstance(section, dict):
+            names |= {name for name in section.get("contexts") or [] if _text(name)}
+            names |= {_text(check.get("context")) for check in section.get("checks") or [] if isinstance(check, dict)}
+        try:
+            rules = self._list(["api", f"repos/{repo}/rules/branches/{quote(base, safe='')}"])
+        except GithubError as e:
+            if not _unprotected(e):
+                raise
+            rules = []
+        for rule in rules:
+            if rule.get("type") != "required_status_checks":
+                continue
+            checks = (rule.get("parameters") or {}).get("required_status_checks") or []
+            names |= {_text(check.get("context")) for check in checks if isinstance(check, dict)}
+        return names - {""}
+
     def set_auto_merge(self, repo: str, number: int, method: str | None) -> None:
         if method is None:
             args, already = ["--disable-auto"], ("not enabled", "not on", "already disabled", "already off")
@@ -374,8 +403,9 @@ class GhPullHub(GhHub):
         return [workflow.path for workflow in self._workflows(repo)]
 
     def latest_workflow_runs(self, repo: str) -> list[WorkflowRun]:
-        """The latest run of each workflow on the default branch that is not skipped by its `if:`: the newest
-        `RUNS_SCANNED` completed runs are read, and the first one not skipped is the workflow's run."""
+        """The latest run of each workflow on the default branch that is neither skipped by its `if:` nor
+        replaced (cancelled before any job started): the newest `RUNS_SCANNED` completed runs are read, and the first
+        one neither is the workflow's run."""
 
         branch = quote(self._default_branch(repo), safe="")
         found = []
@@ -394,7 +424,8 @@ class GhPullHub(GhHub):
         if type(run_id) is not int or not _text(run.get("updated_at")):
             raise GithubError("gh_bad_output", f"{repo}: workflow `{path}` has a run with no id or end time")
         conclusion = run.get("conclusion")
-        # a run GitHub already concluded `skipped` is passed over without reading its jobs
+        # a run GitHub already concluded `skipped` is passed over without reading its jobs (a replaced run is read:
+        # its jobs list is empty, which is how `watch.skipped` knows no job started)
         jobs = [] if conclusion == "skipped" else self._pages(
             ["api", "--paginate", f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"], "jobs")
         return WorkflowRun(
@@ -504,6 +535,19 @@ class GhPullHub(GhHub):
         if len(values) != 1 or not isinstance(values[0], dict):
             raise GithubError("gh_bad_output", f"{' '.join(args[:3])}: expected one object")
         return values[0]
+
+
+_NO_PROTECTION_403 = ("Upgrade to GitHub Pro", "Branch not protected")
+
+
+def _unprotected(error: GithubError) -> bool:
+    """GitHub's refusal to say what a base requires: 404 (not protected), or a 403 whose message says the plan
+    or the branch has no protection. Any other 403 (rate limit, abuse, no permission) is a failure, not a base
+    that requires nothing."""
+    text = str(error)
+    if "HTTP 404" in text:
+        return True
+    return "HTTP 403" in text and any(words in text for words in _NO_PROTECTION_403)
 
 
 def _auto_merge(repo: str, value: object) -> str | None:

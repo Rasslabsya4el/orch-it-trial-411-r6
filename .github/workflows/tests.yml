@@ -90,7 +90,7 @@ jobs:
           bound=$(python -c 'import sys, tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["orch_it"]["tests"][sys.argv[1] + "_timeout_seconds"])' "$kind")
           echo "pytest: $cores cores (os.cpu_count() on this machine), $cores workers; each test is bound to $bound seconds ($kind run)"
           set +e
-          pytest -q -n "$cores" --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
+          pytest -q -n "$cores" --dist worksteal --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
           parallel=$?
           pytest -q --timeout "$bound" --junitxml=junit-serial.xml -m "${select}serial"
           serial=$?
@@ -134,7 +134,7 @@ jobs:
           bound=$(python -c 'import sys, tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["orch_it"]["tests"][sys.argv[1] + "_timeout_seconds"])' "$kind")
           echo "pytest: $cores cores (os.cpu_count() on this machine), $cores workers; each test is bound to $bound seconds ($kind run)"
           set +e
-          pytest -q -n "$cores" --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
+          pytest -q -n "$cores" --dist worksteal --timeout "$bound" --junitxml=junit.xml -m "${select}not serial"
           parallel=$?
           pytest -q --timeout "$bound" --junitxml=junit-serial.xml -m "${select}serial"
           serial=$?
