@@ -10,7 +10,9 @@ whose park waits on this pull request; with none, the open ticket parked on it. 
 request (branch `skills-upstream/<commit>-<base>`) with none of these is followed through the issue `skills
 report` opened for its commit, on a red or no result only: that issue goes to the brain (#412).
 
-Merged (`close` rules): the ticket is closed with its acceptance rows (`closed`), or, when the ticket
+Merged (`close` rules; a pull request whose body says `Part: k of n` with k < n only lands that part
+(`part_landed`, #434; `already_landed` when the ticket already says so): its park comes off, one comment
+says so, the ticket stays open and nothing is judged or closed; the last part, or a pull request with no such line, goes by these rules): the ticket is closed with its acceptance rows (`closed`), or, when the ticket
 has rows marked `after merge`, its park comes off and it goes back to ready for those rows only
 (`after_merge`); with no acceptance comment for this pull request (`acceptance_missing`), a failed
 row (`row_failed`), a body changed since the rows were checked (`ticket_changed`) or a person's
@@ -251,6 +253,9 @@ class _Follow:
         if (held.parked or held.park_lines) and not _parked_on(self.issue, self.repo, self.pull.number):
             self._end_pr("passed", "merged", merge)
             return self.report("merged_other", f"#{self.issue.number} waits on another pull request")
+        part = marks.part_of(self.pull.body)
+        if part and part[0] < part[1]:
+            return self._part_landed(*part, merge)
         accepted, why = self._acceptance_judged()
         if why:
             self._to_brain(why[0], f"#{self.pull.number} merged, but the ticket is not closed: {why[1]}.", "other_way")
@@ -279,6 +284,27 @@ class _Follow:
         self._close_step("passed", None)
         self._end_pr("passed", "merged", merge)
         return self.report("closed", f"rows {passed}/{len(accepted.rows)}")
+
+    def _part_landed(self, k: int, n: int, merge: dict) -> FollowReport:
+        """A merged part before the last (#434): the ticket's park on this pull request ends so the
+        next part's `pr open` is not refused; no acceptance is judged and nothing is closed."""
+
+        said = f"part {k} of {n}"
+        issue = self._fresh()
+        if issue is None or not issue.open:
+            return self.report("already_closed")
+        said_on_ticket = marks.of_layer(self.hub.comments(self.repo, issue.number), self.owner)
+        if marks.part_landed(said_on_ticket, self.pull.number):
+            return self.report("already_landed", said)
+        self._end_park(issue, "due", write=lambda: park.take_off(self.hub, issue))
+        sha = (self.pull.merge_sha or "")[:SHORT_SHA]
+        self.hub.comment(self.repo, issue.number,
+                         f"{marks.follow_mark('part_landed', self.pull.number)}{said} landed: "
+                         f"#{self.pull.number} merged at `{sha}`. The ticket stays open for the next part.")
+        self._write(None, None, [("comment.written", {"comment_kind": "machine"})])
+        self._close_step("passed", None)
+        self._end_pr("passed", "merged", merge)
+        return self.report("part_landed", said)
 
     def _closed_skills(self, merge: dict) -> FollowReport:
         """A skills update's pull request merged: its skills issue (no acceptance table to judge) gets the closing

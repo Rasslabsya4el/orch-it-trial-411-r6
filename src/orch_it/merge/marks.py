@@ -34,6 +34,8 @@ _CLOSING = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*"
     r"(?:[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+#\d+|#\d+|GH-\d+|https://github\.com/[^\s/]+/[^\s/]+/issues/\d+)",
     re.IGNORECASE)
+# a part's pull request (#434): its own line `Part: k of n`
+_PART = re.compile(r"(?m)^Part: ([0-9]{1,9}) of ([0-9]{1,9})[ \t]*\r?$")
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,17 @@ def closing_keywords(text: str) -> list[str]:
     """Every closing keyword with its issue in `text`, as written."""
 
     return [m.group(0) for m in _CLOSING.finditer(text or "")]
+
+
+def part_of(body: str) -> tuple[int, int] | None:
+    """The part a pull request's body names with its line `Part: k of n` (#434), or None when it names
+    none, or names one that is not 1 <= k <= n."""
+
+    found = _PART.search(body or "")
+    if found is None:
+        return None
+    k, n = int(found.group(1)), int(found.group(2))
+    return (k, n) if 1 <= k <= n else None
 
 
 def body_hash(body: str) -> str:
@@ -185,8 +198,18 @@ def left_reason(comments: Iterable[Comment]) -> str | None:
     return reason
 
 
-def follow_mark(outcome: str) -> str:
-    return f"{LAYER_MARK}\n<!-- orch-it follow outcome={outcome} -->\n"
+def follow_mark(outcome: str, pr: int | None = None) -> str:
+    """`pr`: the pull request the outcome is about, for an outcome written once per pull request."""
+
+    named = f" pr={pr}" if pr is not None else ""
+    return f"{LAYER_MARK}\n<!-- orch-it follow outcome={outcome}{named} -->\n"
+
+
+def part_landed(comments: Iterable[Comment], pr: int) -> bool:
+    """Whether the ticket already says that a part, pull request `pr`, landed (#434)."""
+
+    return any(fields.get("outcome") == "part_landed" and fields.get("pr") == str(pr)
+               for _, fields in _marked(comments, "follow"))
 
 
 def follows(comments: Iterable[Comment]) -> list[Followed]:

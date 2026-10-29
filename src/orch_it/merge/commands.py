@@ -2,7 +2,8 @@
 
 - `pr open <ticket> --acceptance <file> [--notes <file>] [--branch B] [--base main] [--work-tree .] [--repo R]`: ORCH's
   acceptance step (decision 1, `orch_it.merge.pr_open`): the measured rows checked against the
-  ticket's, the branch pushed, one pull request per ticket opened with `Refs #N` (or its own reused),
+  ticket's, the branch pushed, one OPEN pull request per ticket at a time opened with `Refs #N` (or its own reused;
+  a merged one never refuses the next; `--part K/N` writes `Part: K of N` beside it),
   the acceptance comment, the ready mark, auto-merge on, the ticket parked on the pull request; prints
   `pr #<n> opened|reused at <head>: <park line>`. `--branch` defaults to the work tree's branch;
 - `follow [<pr>] [--event <file>] [--base main] [--repo R] [--role github]`: the ticket follows its
@@ -50,7 +51,7 @@ from orch_it.merge.git import GitError
 from orch_it.merge.line import holder_of, run_line
 from orch_it.merge.main_check import check_main
 from orch_it.merge.reconcile import reconcile
-from orch_it.merge.pr_open import ROLE as ORCH, PrError, open_pr
+from orch_it.merge.pr_open import ROLE as ORCH, PrError, open_pr, parse_part
 from orch_it.merge.settings import MergeSettings
 from orch_it.testruns.github import DEFAULT_REQUIRED_JOBS, REQUIRED_JOBS_SETTING
 from orch_it.tickets.commands import OWNER_SETTING
@@ -74,11 +75,13 @@ def add_parsers(commands, common: argparse.ArgumentParser) -> None:
     p.add_argument("--base", default="main", help="the branch the line merges into (default: main)")
     group = commands.add_parser("pr", help="the pull request of a ticket").add_subparsers(dest="command",
                                                                                           required=True)
-    p = group.add_parser("open", parents=[repo], help="ORCH's acceptance step: one pull request per ticket")
+    p = group.add_parser("open", parents=[repo], help="ORCH's acceptance step: one open pull request per ticket")
     p.add_argument("ticket", type=int)
     p.add_argument("--acceptance", required=True, metavar="FILE",
                    help="the measured rows: a table with the columns row, result, evidence")
     p.add_argument("--notes", metavar="FILE", help="ORCH's report lines for the body of a new pull request")
+    p.add_argument("--part", metavar="K/N", help="this pull request is part K of N of the ticket (#434): "
+                   "its body says `Part: K of N`")
     p.add_argument("--branch", help="the ticket's branch (default: the work tree's)")
     p.add_argument("--base", default="main", help="the branch it merges into (default: main)")
     p.add_argument("--work-tree", default=".", metavar="PATH")
@@ -135,6 +138,7 @@ def _unlock(args, store_of, repo_of, now: datetime) -> str:
 
 
 def _pr_open(args, store_of, repo_of, now: datetime) -> str:
+    part = parse_part(args.part) if args.part else None
     repo = args.repo or repo_of(args.work_tree)
     try:
         acceptance = Path(args.acceptance).read_text("utf-8-sig")
@@ -151,7 +155,7 @@ def _pr_open(args, store_of, repo_of, now: datetime) -> str:
         raise PrError("git_failed", str(e)) from None
     done = open_pr(GhPullHub(), store_of(), repo, args.ticket, acceptance=acceptance, branch=branch, base=args.base,
                    git=git, settings=MergeSettings.from_settings(settings.load(), repo), now=now, role=args.role,
-                   notes=notes)
+                   notes=notes, part=part)
     return f"pr #{done.pr} {'reused' if done.reused else 'opened'} at {done.head[:12]}: {done.park}\n"
 
 

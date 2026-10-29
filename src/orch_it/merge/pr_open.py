@@ -1,14 +1,16 @@
-"""`pr open <ticket>` (#400 decision 1): ORCH's acceptance step ends in one pull request per ticket.
+"""`pr open <ticket>` (#400 decision 1): ORCH's acceptance step ends in one OPEN pull request per
+ticket at a time; a merged one never refuses the next (#434), and a part's pull request carries
+`Part: k of n` beside `Refs #N`.
 
 In this order, and nothing written before every check passed:
 
 1. the ticket is open, has an acceptance table, and the results ORCH measured (a table `row`,
    `result`, `evidence`) name each of its rows once: a row marked `after merge` is `after merge`,
    every other row `pass`, or `na` with its evidence; any `fail` refuses (`row_failed`);
-2. one pull request per ticket: an open pull request of another branch that refers to the ticket
-   refuses (`ticket_has_pr`), the branch's own open pull request is reused when it refers to this
-   ticket and refused when it refers to another (`pr_other_ticket`); a ticket parked on anything but
-   that pull request refuses (`parked_elsewhere`);
+2. one OPEN pull request per ticket at a time: an open pull request of another branch that refers to
+   the ticket refuses (`ticket_has_pr`), the branch's own open pull request is reused when it refers
+   to this ticket and refused when it refers to another (`pr_other_ticket`); a ticket parked on
+   anything but that pull request refuses (`parked_elsewhere`);
 3. no commit of the branch past the base, and not the title, holds a closing keyword
    (`closing_keyword`, MERGE-10): the pull request says `Refs #N` and the ticket is closed by the
    follow, with its acceptance rows, never by GitHub;
@@ -41,8 +43,10 @@ PR_ERROR_CODES = (
     "ticket_missing", "ticket_not_open", "acceptance_missing", "acceptance_unreadable", "row_missing",
     "row_failed", "row_unknown", "row_twice", "row_bad", "branch_is_base", "branch_bad", "ticket_has_pr",
     "pr_other_ticket", "parked_elsewhere", "closing_keyword", "git_failed", "push_failed", "head_moved",
+    "bad_part",
 )
 _REFS = re.compile(r"(?m)^Refs #([1-9][0-9]{0,9})\b")
+_PART_ARG = re.compile(r"([0-9]{1,9})/([0-9]{1,9})")
 
 EVIDENCE_CHARS = 200  # an event's evidence; the comment keeps the whole of it
 Git = Callable[[list[str]], str]  # `git <args>` in the work tree; raises `orch_it.merge.git.GitError`
@@ -73,9 +77,23 @@ def refers_to(body: str) -> int | None:
     return int(found.group(1)) if found else None
 
 
+def parse_part(text: str) -> tuple[int, int]:
+    """The `--part K/N` argument (#434): 1 <= K <= N, else `PrError` `bad_part`."""
+
+    found = _PART_ARG.fullmatch(text or "")
+    if found is None or not 1 <= int(found.group(1)) <= int(found.group(2)):
+        raise PrError("bad_part", f"{(text or '')[:20]!r} is not K/N with 1 <= K <= N")
+    return int(found.group(1)), int(found.group(2))
+
+
 def open_pr(hub: PullHub, store: Store, repo: str, number: int, *, acceptance: str, branch: str, base: str,
-            git: Git, settings: MergeSettings, now: datetime, role: str = ROLE, notes: str = "") -> Opened:
-    """`notes`: ORCH's report lines, put in the body of a pull request it opens, under its rows."""
+            git: Git, settings: MergeSettings, now: datetime, role: str = ROLE, notes: str = "",
+            part: tuple[int, int] | None = None) -> Opened:
+    """`notes`: ORCH's report lines, put in the body of a pull request it opens, under its rows.
+    `part`: the (k, n) of a part's pull request (#434), written as `Part: k of n` in a new body; a
+    reused pull request keeps its body."""
+    if part is not None and not 1 <= part[0] <= part[1]:
+        raise PrError("bad_part", f"{part[0]}/{part[1]} is not K/N with 1 <= K <= N")
     for name in (branch, base):
         if not branch_ok(name):
             raise PrError("branch_bad", f"{name[:60]!r} is no branch name git would read as one")
@@ -121,7 +139,7 @@ def open_pr(hub: PullHub, store: Store, repo: str, number: int, *, acceptance: s
 
     reused = mine is not None
     pr = mine.number if reused else hub.create_pull(repo, base, branch, issue.title,
-                                                    _pr_body(number, issue.title, rows, notes))
+                                                    _pr_body(number, issue.title, rows, notes, part))
     pull = hub.pull(repo, pr)
     if pull is None or pull.head_sha != measured:
         # the rows were measured on the work tree's head; another one would land unmeasured
@@ -204,8 +222,10 @@ def _parked_on(lines: tuple[str, ...], repo: str, mine: Pull | None) -> bool:
     return mine is not None and ref is not None and ref.names(repo, mine.number, repo)
 
 
-def _pr_body(number: int, title: str, rows: list[marks.ResultRow], notes: str) -> str:
+def _pr_body(number: int, title: str, rows: list[marks.ResultRow], notes: str,
+             part: tuple[int, int] | None = None) -> str:
     table = "".join(f"| {row.id} | {row.result} |\n" for row in rows)
     tail = f"\n{notes.strip()}\n" if notes.strip() else ""
-    return (f"Refs #{number}\n\n{title}\n\nThe acceptance rows, checked before this pull request "
+    header = f"Refs #{number}\n" + (f"Part: {part[0]} of {part[1]}\n" if part else "")
+    return (f"{header}\n{title}\n\nThe acceptance rows, checked before this pull request "
             f"(the ticket's acceptance comment holds their evidence):\n\n| row | result |\n|---|---|\n{table}{tail}")

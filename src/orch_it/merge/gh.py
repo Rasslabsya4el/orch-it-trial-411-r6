@@ -67,6 +67,7 @@ EVENT_ARTIFACT_PAGES = 3  # of 100 artifacts each, newest first
 BASE_REF, PULL_REF = "refs/orch/base", "refs/orch/pr"
 BRANCH_RUN_EVENTS = ("push", "schedule", "workflow_dispatch")
 METHODS = ("merge", "squash", "rebase")
+DISABLE_REFUSAL = "can't disable auto-merge"  # GitHub's text when a disable finds no auto-merge to turn off
 _RUN_OF_JOB = re.compile(r"/actions/runs/(\d+)/job/")
 _PULL_URL = re.compile(r"/pull/(\d+)/?$")
 
@@ -172,8 +173,18 @@ class GhPullHub(GhHub):
         try:
             self.gh(["pr", "merge", str(number), "--repo", repo, *args])
         except GithubError as e:
-            if not any(phrase in str(e).lower() for phrase in already):
-                raise
+            if any(phrase in str(e).lower() for phrase in already):
+                return
+            if method is None and DISABLE_REFUSAL in str(e).lower() and self._auto_merge_is_off(repo, number):
+                return
+            raise
+
+    def _auto_merge_is_off(self, repo: str, number: int) -> bool:
+        """After GitHub refused a disable: True when the pull request has no auto-merge on (it was landed or closed
+        meanwhile, or never had it), so the refusal is the state the caller wanted."""
+
+        found = self.pull(repo, number)
+        return found is None or found.state != "open" or found.auto_merge is None
 
     def update_branch(self, repo: str, number: int, head_sha: str) -> bool:
         try:

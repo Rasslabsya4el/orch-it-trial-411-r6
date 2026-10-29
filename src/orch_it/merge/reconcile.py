@@ -46,7 +46,7 @@ _STORE_FILE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}/[A-Za-z0-9._-]{1,120}\.jso
 _REPAIR = {"closed": "closed", "closed_skills": "closed", "rerun": "rerun", "stuck": "rerun"}
 # a follow that changed nothing of its ticket; every other outcome returned it or sent it to the brain
 _NO_REPAIR = ("idle", "waiting", "green", "behind", "raced", "merged_alone", "merged_other", "already_closed",
-              "withdrawn")
+              "already_landed", "withdrawn")
 IMPORTED_FILE = ".imported-artifacts"  # in the store's folder, out of the index's `<day>/<writer>.jsonl`
 
 
