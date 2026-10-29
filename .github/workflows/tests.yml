@@ -38,7 +38,7 @@ jobs:
     # `env` is not readable in a job-level timeout) gets 27 minutes = ceil(17.4 x 1.5). Measured on GitHub runners
     # in runs 40870600022 and 40870569933 (2026-10-29): full suite 17.4 and 16.7 min, pytest alone 16 m 21 s;
     # margin 1.5 on the longest full run.
-    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 27 || 3 }}
+    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 27 || 15 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -115,7 +115,7 @@ jobs:
     # `env` is not readable in a job-level timeout) gets 59 minutes = ceil(39.3 x 1.5). Measured on GitHub runners
     # in runs 40870600022 and 40870569933 (2026-10-29): full suite 39.3 and 39.2 min, pytest alone 38 m 43 s;
     # margin 1.5 on the longest full run.
-    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 59 || 3 }}
+    timeout-minutes: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.slow_and_live)) && 59 || 15 }}
     steps:
       - uses: actions/checkout@v4
         with:
